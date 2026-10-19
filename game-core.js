@@ -38,6 +38,15 @@
     ], random);
     return makeCourse(bank, 'short', random);
   }
+  function makePlaceBonusCourse(bank, random = Math.random) {
+    validate(bank);
+    const course = Object.fromEntries(placeKeys.map(key => [key, shuffle(bank.filter(q => q.placeKey === key), random).slice(0, 3)]));
+    const selected = Object.values(course).flat();
+    if (selected.length !== 15 || new Set(selected.map(q => q.id)).size !== 15 || placeKeys.some(key => course[key].length !== 3)) {
+      throw new Error('장소별 보너스 문제를 만들 수 없습니다.');
+    }
+    return course;
+  }
   class Session {
     constructor(questions) { validate(questions); this.questions = questions.slice(); this.index = 0; this.coins = 0; this.combo = 0; this.bestCombo = 0; this.history = []; this.answered = false; }
     get current() { return this.questions[this.index] || null; }
@@ -69,5 +78,5 @@
     answerBonus(correct, reward = 20) { if (this.done) return 0; this.bonusAnswered++; if (correct) { this.bonusCorrect++; this.coins += reward; return reward; } this.coins = Math.max(0, this.coins - 20); return -20; }
     get done() { return this.bonusAnswered >= this.totalBonuses || this.hearts <= 0; }
   }
-  return { validate, makeCourse, makeBonusCourse, Session, RunnerModel, placeKeys };
+  return { validate, makeCourse, makeBonusCourse, makePlaceBonusCourse, Session, RunnerModel, placeKeys };
 });

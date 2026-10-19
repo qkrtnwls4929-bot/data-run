@@ -10,7 +10,7 @@
     { key: 'library', icon: '📚', name: '도서관' },
     { key: 'environment', icon: '🌳', name: '생활환경' }
   ];
-  let state = 'home', mode = 'short', model, questions = [], questionIndex = 0, activeQuestion = null;
+  let state = 'home', model, placeQuestions = {}, activeQuestion = null;
   let history = [], objects = [], animationId = 0, lastTime = 0, elapsed = 0, nextQuizAt = 20;
   let spawnIn = 1.2, worldOffset = 0, stageIndex = -1, stageQuizCount = 0, audio = null, invincible = 0, fallReason = '';
   const player = { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09, falling: false };
@@ -38,10 +38,9 @@
     if ($('help-dialog').open) $('help-dialog').close();
     if ($('pause-dialog').open) $('pause-dialog').close();
     if ($('bonus-dialog').open) $('bonus-dialog').close();
-    mode = document.querySelector('input[name="course"]:checked')?.value || mode;
-    questions = DataRun.makeBonusCourse(bank, mode);
-    questionIndex = 0; history = []; objects = []; $('objects').replaceChildren();
-    model = new DataRun.RunnerModel(9999, 1);
+    placeQuestions = DataRun.makePlaceBonusCourse(bank);
+    history = []; objects = []; $('objects').replaceChildren();
+    model = new DataRun.RunnerModel(15, 1);
     Object.assign(player, { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09, falling: false });
     elapsed = worldOffset = 0; nextQuizAt = 15; spawnIn = 1.05; stageIndex = -1; stageQuizCount = 0; invincible = 0; fallReason = '';
     $('game').className = 'game-screen'; $('runner').style.transform = 'translateY(0)';
@@ -68,7 +67,7 @@
     const speed = getSpeed(), level = Math.min(4, Math.floor(elapsed / 60));
     updateTheme(level); updatePhysics(dt); moveWorld(dt, speed); moveObjects(dt, speed); maybeSpawn(dt, level);
     model.travel(speed * dt / 25); updateHud();
-    if (stageQuizCount < 3 && elapsed >= nextQuizAt && player.grounded && !nearGap()) openBonus();
+    if (!model.done && stageQuizCount < 3 && elapsed >= nextQuizAt && player.grounded && !nearGap()) openBonus();
     if (state === 'running') animationId = requestAnimationFrame(frame);
   }
   function updatePhysics(dt) {
@@ -166,7 +165,10 @@
   }
 
   function openBonus() {
-    state = 'quiz'; cancelAnimationFrame(animationId); activeQuestion = questions[questionIndex % questions.length]; questionIndex++; stageQuizCount++;
+    const placeKey = themes[stageIndex].key;
+    activeQuestion = placeQuestions[placeKey][stageQuizCount];
+    if (!activeQuestion) return;
+    state = 'quiz'; cancelAnimationFrame(animationId); stageQuizCount++;
     $('bonus-number').textContent = `보너스 문제 ${history.length + 1}`; $('question-kind').textContent = typeNames[activeQuestion.type];
     $('question').textContent = activeQuestion.question; $('prompt').textContent = activeQuestion.prompt || '생활 속 문제를 해결하려면 어떤 데이터가 필요할까요?';
     $('choices').replaceChildren(); $('feedback').hidden = true; $('feedback').className = 'feedback';
