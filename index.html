@@ -7,7 +7,7 @@
   <meta name="description" content="로봇과 직접 달리고 점프하며 보너스 데이터 문제를 푸는 학교 러닝 게임">
   <title>데이터 런 — 점프! 달리기! 데이터!</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=9"><link rel="stylesheet" href="runner-extra.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10"><link rel="stylesheet" href="runner-extra.css?v=10">
   <link rel="preload" href="assets/start-screen.png" as="image">
 </head>
 <body>
@@ -64,8 +64,7 @@
     <h1 id="results-title">달리기 완료!</h1><p id="result-message"></p>
     <div class="result-score"><small>최종 점수</small><b id="result-score">0</b></div>
     <div class="result-stats"><div><span>모은 코인</span><b id="result-coins">0</b></div><div><span>보너스 정답</span><b id="result-correct">0 / 0</b></div><div><span>달린 거리</span><b id="result-distance">0m</b></div></div>
-    <section class="upgrade-panel"><span class="eyebrow">RUN REWARD</span><h2>보상으로 하나를 강화해요</h2><p>달리며 모은 데이터 조각: <b id="shards">0</b></p><div id="upgrades" class="upgrades"></div></section>
-    <div class="result-actions"><button id="replay" class="primary">↻ 강화하고 다시 달리기</button><button id="result-home" class="secondary">시작 화면</button></div>
+    <div class="result-actions"><button id="replay" class="primary">↻ 다시 플레이</button><button id="result-home" class="secondary">시작 화면</button></div>
     <div id="review" class="review"></div>
   </section>
 </main>
@@ -84,6 +83,6 @@
 
 <dialog id="pause-dialog" class="modal pause-modal"><div class="pause-symbol">Ⅱ</div><h2>잠깐 쉬어 가요</h2><p>준비되면 다시 달려요.</p><button id="resume" class="primary wide">계속 달리기 ▶</button><button id="pause-home" class="text-btn wide">시작 화면으로</button></dialog>
 
-<script src="questions.js"></script><script src="game-core.js?v=9"></script><script src="app.js?v=9"></script>
+<script src="questions.js"></script><script src="game-core.js?v=10"></script><script src="app.js?v=10"></script>
 </body>
 </html>

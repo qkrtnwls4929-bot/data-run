@@ -10,31 +10,16 @@
     { key: 'library', icon: '📚', name: '도서관' },
     { key: 'environment', icon: '🌳', name: '생활환경' }
   ];
-  const upgradeDefs = [
-    { key: 'jump', icon: '👟', name: '점프 추진력', detail: '점프 높이 +4%' },
-    { key: 'heart', icon: '💚', name: '충격 보호', detail: '시작 체력 +1' },
-    { key: 'sensor', icon: '📡', name: '데이터 센서', detail: '코인 획득 범위 증가' }
-  ];
-
   let state = 'home', mode = 'short', model, questions = [], questionIndex = 0, activeQuestion = null;
   let history = [], objects = [], animationId = 0, lastTime = 0, elapsed = 0, nextQuizAt = 20;
-  let spawnIn = 1.2, worldOffset = 0, stageIndex = -1, audio = null, invincible = 0, fallReason = '';
+  let spawnIn = 1.2, worldOffset = 0, stageIndex = -1, stageQuizCount = 0, audio = null, invincible = 0, fallReason = '';
   const player = { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 };
-  let upgrades = loadUpgrades();
 
   try { DataRun.validate(bank); } catch (error) {
     $('home').innerHTML = '<div class="error-screen"><h1>문제를 불러오지 못했어요</h1><p>게임 파일을 모두 함께 열어 주세요.</p></div>';
     console.error(error); return;
   }
 
-  function loadUpgrades() {
-    try {
-      const saved = JSON.parse(localStorage.getItem('dataRunUpgrades') || '{}');
-      return { jump: clampInt(saved.jump, 0, 5), heart: clampInt(saved.heart, 0, 3), sensor: clampInt(saved.sensor, 0, 5), shards: Math.max(0, Number(saved.shards) || 0) };
-    } catch { return { jump: 0, heart: 0, sensor: 0, shards: 0 }; }
-  }
-  function clampInt(value, min, max) { value = Math.floor(Number(value) || 0); return Math.max(min, Math.min(max, value)); }
-  function saveUpgrades() { try { localStorage.setItem('dataRunUpgrades', JSON.stringify(upgrades)); } catch {} }
   function showScreen(id) { ['home', 'game', 'results'].forEach(x => $(x).hidden = x !== id); window.scrollTo({ top: 0, behavior: 'instant' }); }
   function initAudio() { try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume().catch(() => {}); } catch {} }
   function tone(freq, duration = .08, type = 'sine', volume = .035, delay = 0) {
@@ -56,9 +41,9 @@
     mode = document.querySelector('input[name="course"]:checked')?.value || mode;
     questions = DataRun.makeBonusCourse(bank, mode);
     questionIndex = 0; history = []; objects = []; $('objects').replaceChildren();
-    model = new DataRun.RunnerModel(9999, 3 + upgrades.heart);
+    model = new DataRun.RunnerModel(9999, 3);
     Object.assign(player, { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 });
-    elapsed = worldOffset = 0; nextQuizAt = 16; spawnIn = 1.05; stageIndex = -1; invincible = 0; fallReason = '';
+    elapsed = worldOffset = 0; nextQuizAt = 15; spawnIn = 1.05; stageIndex = -1; stageQuizCount = 0; invincible = 0; fallReason = '';
     $('game').className = 'game-screen'; $('runner').style.transform = 'translateY(0)';
     updateHud(); updateTheme(0); showScreen('game'); state = 'countdown';
     countdown(['3', '2', '1', 'GO!'], 0);
@@ -73,8 +58,8 @@
   function getSpeed() {
     const level = Math.min(4, Math.floor(elapsed / 60));
     const responsiveBase = Math.max(200, Math.min(320, $('scene').clientWidth * .25));
-    // Stage 1 now starts at the previous Stage 4 pace (+105px/s).
-    return Math.min(440, responsiveBase + 105 + level * 20);
+    const stageBoosts = [105, 165, 240, 330, 440];
+    return Math.min(700, responsiveBase + stageBoosts[level]);
   }
   function frame(now) {
     if (state !== 'running') return;
@@ -83,7 +68,7 @@
     const speed = getSpeed(), level = Math.min(4, Math.floor(elapsed / 60));
     updateTheme(level); updatePhysics(dt); moveWorld(dt, speed); moveObjects(dt, speed); maybeSpawn(dt, level);
     model.travel(speed * dt / 25); updateHud();
-    if (elapsed >= nextQuizAt && player.grounded && !nearGap()) openBonus();
+    if (stageQuizCount < 3 && elapsed >= nextQuizAt && player.grounded && !nearGap()) openBonus();
     if (state === 'running') animationId = requestAnimationFrame(frame);
   }
   function updatePhysics(dt) {
@@ -103,8 +88,8 @@
   function jump() {
     if (state !== 'running') return;
     const canFirst = player.grounded || player.coyote > 0;
-    if (canFirst) { player.grounded = false; player.coyote = 0; player.jumps = 1; player.vy = 710 * (1 + upgrades.jump * .04); jumpSound(false); }
-    else if (player.jumps < 2) { player.jumps = 2; player.vy = 655 * (1 + upgrades.jump * .04); jumpSound(true); showFloat('2단 점프!', '#d9c2ff'); }
+    if (canFirst) { player.grounded = false; player.coyote = 0; player.jumps = 1; player.vy = 710; jumpSound(false); }
+    else if (player.jumps < 2) { player.jumps = 2; player.vy = 655; jumpSound(true); showFloat('2단 점프!', '#d9c2ff'); }
   }
   function moveWorld(dt, speed) {
     worldOffset += speed * dt;
@@ -114,9 +99,9 @@
   function maybeSpawn(dt, level) {
     spawnIn -= dt; if (spawnIn > 0) return;
     const roll = Math.random(), startX = $('scene').clientWidth + 80;
-    if (elapsed < 4 || roll < .42) spawnCoinLine(startX, level);
-    else if (roll < .74) { spawnObject('obstacle', startX, 0, 55, false); spawnObject('coin', startX + 5, level > 1 ? 120 : 92, 48); }
-    else if (roll < .91 || elapsed < 32) { spawnObject(level >= 1 ? 'obstacle high' : 'obstacle', startX, 0, level >= 1 ? 62 : 55, false); spawnObject('coin', startX + 8, level >= 1 ? 150 : 92, 48); }
+    if (elapsed < 3 || roll < .35) spawnCoinLine(startX, level);
+    else if (roll < .65) { spawnObject('obstacle', startX, 0, 55, false); spawnObject('coin', startX + 5, 92, 48); }
+    else if (roll < .87) { spawnObject('obstacle high', startX, 0, 62, false); spawnObject('coin', startX + 8, 150, 48); }
     else { const width = 112 + level * 9; spawnObject('gap', startX, 0, width, false); [0,1,2].forEach(i => spawnObject('coin', startX + 20 + i * (width - 40) / 2, 72 + (i === 1 ? 55 : 10), 45)); }
     spawnIn = Math.max(.74, 1.22 - level * .08) + Math.random() * .28;
   }
@@ -130,7 +115,7 @@
     $('objects').append(el); objects.push({ el, type: kind.split(' ')[0], high: kind.includes('high'), x, height, width, collected: false, hit: false, collectible });
   }
   function moveObjects(dt, speed) {
-    const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18), sensor = 25 + upgrades.sensor * 12;
+    const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18), sensor = 25;
     objects.forEach(obj => {
       obj.x -= speed * dt; obj.el.style.transform = `translateX(${obj.x}px)`;
       const overlap = obj.x < runnerX + 100 + sensor && obj.x + obj.width > runnerX + 25 - sensor;
@@ -170,6 +155,7 @@
     const current = Math.floor(elapsed / 60) % themes.length;
     if (current !== stageIndex) {
       stageIndex = current; const theme = themes[current];
+      stageQuizCount = 0; nextQuizAt = Math.floor(elapsed / 60) * 60 + 15;
       $('scene').className = `scene theme-${theme.key} speed-${level + 1}`;
       $('theme-banner').innerHTML = `<small>${current + 1}번째 장소 · 1분 구간</small><b>${theme.icon} ${theme.name}</b>`;
       $('scene-message').textContent = `${theme.name}에서 필요한 데이터를 찾아 달려요!`;
@@ -178,7 +164,7 @@
   }
 
   function openBonus() {
-    state = 'quiz'; cancelAnimationFrame(animationId); activeQuestion = questions[questionIndex % questions.length]; questionIndex++;
+    state = 'quiz'; cancelAnimationFrame(animationId); activeQuestion = questions[questionIndex % questions.length]; questionIndex++; stageQuizCount++;
     $('bonus-number').textContent = `보너스 문제 ${history.length + 1}`; $('question-kind').textContent = typeNames[activeQuestion.type];
     $('question').textContent = activeQuestion.question; $('prompt').textContent = activeQuestion.prompt || '생활 속 문제를 해결하려면 어떤 데이터가 필요할까요?';
     $('choices').replaceChildren(); $('feedback').hidden = true; $('feedback').className = 'feedback';
@@ -197,25 +183,18 @@
   }
   function continueRun() {
     if (state !== 'quiz' || $('feedback').hidden) return;
-    $('bonus-dialog').close(); nextQuizAt = elapsed + 28; state = 'running'; lastTime = performance.now(); animationId = requestAnimationFrame(frame);
+    $('bonus-dialog').close(); nextQuizAt = stageQuizCount < 3 ? Math.floor(elapsed / 60) * 60 + 15 * (stageQuizCount + 1) : Infinity; state = 'running'; lastTime = performance.now(); animationId = requestAnimationFrame(frame);
   }
 
   function triggerFall(reason) {
     if (!['running','countdown'].includes(state)) return;
-    state = 'falling'; fallReason = reason; cancelAnimationFrame(animationId); $('game').classList.add('falling'); hitSound();
-    setTimeout(finish, 1050);
+    state = 'falling'; fallReason = reason; cancelAnimationFrame(animationId); hitSound(); finish();
   }
   function finish() {
-    state = 'results'; showScreen('results'); const earned = Math.max(1, Math.floor(model.coins / 20) + model.bonusCorrect * 2); upgrades.shards += earned; saveUpgrades();
-    $('results-title').textContent = '이번 달리기 종료!'; $('result-message').textContent = fallReason + ` 데이터 조각 ${earned}개를 보상으로 받았어요.`;
-    $('result-score').textContent = model.score.toLocaleString(); $('result-coins').textContent = model.coins; $('result-correct').textContent = `${model.bonusCorrect} / ${model.bonusAnswered}`; $('result-distance').textContent = `${Math.floor(model.distance)}m`; $('shards').textContent = upgrades.shards;
-    renderUpgrades(); renderReview();
+    state = 'results'; showScreen('results');
+    $('results-title').textContent = '이번 달리기 종료!'; $('result-message').textContent = fallReason;
+    $('result-score').textContent = model.score.toLocaleString(); $('result-coins').textContent = model.coins; $('result-correct').textContent = `${model.bonusCorrect} / ${model.bonusAnswered}`; $('result-distance').textContent = `${Math.floor(model.distance)}m`; renderReview();
   }
-  function renderUpgrades() {
-    $('upgrades').replaceChildren();
-    upgradeDefs.forEach(def => { const level = upgrades[def.key], max = def.key === 'heart' ? 3 : 5, cost = (level + 1) * 4; const button = document.createElement('button'); button.className = 'upgrade'; button.disabled = level >= max || upgrades.shards < cost; button.innerHTML = `<span>${def.icon}</span><b>${def.name} Lv.${level}</b><small>${level >= max ? '최고 단계' : `${def.detail} · 조각 ${cost}개`}</small>`; button.addEventListener('click', () => buyUpgrade(def.key, cost, button)); $('upgrades').append(button); });
-  }
-  function buyUpgrade(key, cost, button) { if (upgrades.shards < cost) return; upgrades.shards -= cost; upgrades[key]++; saveUpgrades(); button.classList.add('selected'); $('shards').textContent = upgrades.shards; setTimeout(renderUpgrades, 350); tone(660,.12,'sine',.04); tone(880,.18,'sine',.04,.09); }
   function renderReview() {
     $('review').replaceChildren(); if (!history.length) return;
     const title = document.createElement('h2'); title.textContent = '보너스 문제 학습 기록'; $('review').append(title);
