@@ -40,7 +40,7 @@ test('embedded question script and JSON are identical, and app uses only relativ
   const vm = require('node:vm'); const sandbox = {window:{}}; vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../questions.js'),'utf8'), sandbox);
   assert.equal(JSON.stringify(sandbox.window.DATA_RUN_QUESTIONS.questions), JSON.stringify(bank));
   const html = fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
-  for (const match of html.matchAll(/(?:src|href)="([^"#]+)"/g)) { assert.ok(!match[1].startsWith('/')); assert.ok(fs.existsSync(path.join(__dirname,'..',match[1]))); }
+  for (const match of html.matchAll(/(?:src|href)="([^"#]+)"/g)) { const asset = match[1].split('?')[0]; assert.ok(!asset.startsWith('/')); assert.ok(fs.existsSync(path.join(__dirname,'..',asset))); }
 });
 test('runner score is coin score plus distance score without combo bonus', () => {
   const runner = new RunnerModel(10); runner.travel(42.9); runner.collectCoin(); runner.collectCoin();
