@@ -2,100 +2,235 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const bank = window.DATA_RUN_QUESTIONS?.questions;
-  const places = { cafeteria: ['🍽️', '급식실'], restroom: ['🫧', '화장실'], classroom: ['✏️', '교실'], library: ['📚', '도서관'], environment: ['🌳', '학교 정원'], concept: ['💡', '데이터 연구소'] };
   const typeNames = { life: '생활 속 데이터', concept: '데이터 개념', datatype: '수치형 · 범주형' };
-  let session, state = 'home', mode = 'all', animationId, lastTime = 0, worldOffset = 0, elapsed = 0, notesAt = 0, fxAt = 0;
-  let audio, sound = false, returnFocus, assetsReady = false;
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  try { DataRun.validate(bank); } catch (error) { $('home').innerHTML = '<div class="error-screen"><h1>문제를 불러오지 못했어요</h1><p>게임 폴더의 파일을 모두 함께 열거나, 웹페이지를 새로고침해 주세요.</p></div>'; console.error(error); return; }
-  // Load local assets without fetch so the download also runs directly from a file.
-  Promise.all(['assets/robot-run.png', 'assets/school-world.png'].map(src => new Promise(resolve => { const img = new Image(); img.onload = () => resolve(true); img.onerror = () => resolve(false); img.src = src; }))).then(results => { assetsReady = results.every(Boolean); if (!assetsReady) console.warn('Some game artwork could not be loaded.'); });
-  const soundButtons = [...document.querySelectorAll('.sound-toggle')];
+  const themes = [
+    { key: 'cafeteria', icon: '🍽️', name: '급식실' },
+    { key: 'restroom', icon: '🫧', name: '화장실' },
+    { key: 'classroom', icon: '✏️', name: '교실' },
+    { key: 'library', icon: '📚', name: '도서관' },
+    { key: 'environment', icon: '🌳', name: '생활환경' }
+  ];
+  const upgradeDefs = [
+    { key: 'jump', icon: '👟', name: '점프 추진력', detail: '점프 높이 +4%' },
+    { key: 'heart', icon: '💚', name: '충격 보호', detail: '시작 체력 +1' },
+    { key: 'sensor', icon: '📡', name: '데이터 센서', detail: '코인 획득 범위 증가' }
+  ];
+
+  let state = 'home', mode = 'short', model, questions = [], questionIndex = 0, activeQuestion = null;
+  let history = [], objects = [], animationId = 0, lastTime = 0, elapsed = 0, nextQuizAt = 20;
+  let spawnIn = 1.2, worldOffset = 0, stageIndex = -1, audio = null, invincible = 0, fallReason = '';
+  const player = { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 };
+  let upgrades = loadUpgrades();
+
+  try { DataRun.validate(bank); } catch (error) {
+    $('home').innerHTML = '<div class="error-screen"><h1>문제를 불러오지 못했어요</h1><p>게임 파일을 모두 함께 열어 주세요.</p></div>';
+    console.error(error); return;
+  }
+
+  function loadUpgrades() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('dataRunUpgrades') || '{}');
+      return { jump: clampInt(saved.jump, 0, 5), heart: clampInt(saved.heart, 0, 3), sensor: clampInt(saved.sensor, 0, 5), shards: Math.max(0, Number(saved.shards) || 0) };
+    } catch { return { jump: 0, heart: 0, sensor: 0, shards: 0 }; }
+  }
+  function clampInt(value, min, max) { value = Math.floor(Number(value) || 0); return Math.max(min, Math.min(max, value)); }
+  function saveUpgrades() { try { localStorage.setItem('dataRunUpgrades', JSON.stringify(upgrades)); } catch {} }
+  function showScreen(id) { ['home', 'game', 'results'].forEach(x => $(x).hidden = x !== id); window.scrollTo({ top: 0, behavior: 'instant' }); }
   function initAudio() { try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume().catch(() => {}); } catch {} }
-  function tone(frequency, duration, type = 'sine', delay = 0, volume = .035) {
-    if (!sound || !audio || audio.state !== 'running') return;
+  function tone(freq, duration = .08, type = 'sine', volume = .035, delay = 0) {
+    if (!audio || audio.state !== 'running') return;
     const osc = audio.createOscillator(), gain = audio.createGain(), at = audio.currentTime + delay;
-    osc.type = type; osc.frequency.setValueAtTime(frequency, at); gain.gain.setValueAtTime(.001, at); gain.gain.linearRampToValueAtTime(volume, at + .012); gain.gain.exponentialRampToValueAtTime(.001, at + duration);
+    osc.type = type; osc.frequency.setValueAtTime(freq, at); gain.gain.setValueAtTime(.001, at); gain.gain.linearRampToValueAtTime(volume, at + .01); gain.gain.exponentialRampToValueAtTime(.001, at + duration);
     osc.connect(gain); gain.connect(audio.destination); osc.start(at); osc.stop(at + duration + .02);
   }
-  function melody(ok) { (ok ? [523.25, 659.25, 783.99] : [293.66, 246.94]).forEach((n, i) => tone(n, .18, 'sine', i * .1, .055)); }
-  function toggleSound() { sound = !sound; if (sound) initAudio(); soundButtons.forEach(b => { b.setAttribute('aria-pressed', String(sound)); b.setAttribute('aria-label', sound ? '소리 끄기' : '소리 켜기'); if (b.classList.contains('text-btn')) b.textContent = sound ? '♫ 소리 끄기' : '♫ 소리 켜기'; else b.textContent = sound ? '♫' : '♪'; }); }
-  function showScreen(id) { ['home', 'game', 'results'].forEach(x => $(x).hidden = x !== id); window.scrollTo({ top: 0, behavior: 'instant' }); }
-  function getRoute() { return [...new Set(session.questions.map(q => q.placeKey || 'concept'))]; }
-  function renderRoute() {
-    const keys = getRoute(), current = session.current?.placeKey || 'concept', reached = new Set(session.history.map(x => x.question.placeKey || 'concept'));
-    $('route').replaceChildren();
-    keys.forEach((key, i) => {
-      if (i) { const line = document.createElement('span'); line.className = 'route-line'; line.setAttribute('aria-hidden', 'true'); $('route').append(line); }
-      const step = document.createElement('span'); step.className = 'route-step' + (current === key ? ' active' : reached.has(key) ? ' done' : ''); step.textContent = places[key][0] + ' ' + places[key][1]; if (current === key) step.setAttribute('aria-current', 'step'); $('route').append(step);
+  function coinSound() { const notes = [523, 587, 659, 784, 698, 880]; tone(notes[model.coins % notes.length], .075, 'sine', .028); }
+  function jumpSound(second) { tone(second ? 620 : 450, .11, 'triangle', .03); }
+  function hitSound() { tone(115, .18, 'sawtooth', .06); tone(82, .22, 'square', .025, .05); }
+  function quizSound(correct) { (correct ? [523, 659, 784] : [220, 175]).forEach((n, i) => tone(n, .15, 'sine', .04, i * .09)); }
+
+  function start() {
+    initAudio();
+    if ($('help-dialog').open) $('help-dialog').close();
+    if ($('pause-dialog').open) $('pause-dialog').close();
+    if ($('bonus-dialog').open) $('bonus-dialog').close();
+    mode = document.querySelector('input[name="course"]:checked')?.value || mode;
+    questions = DataRun.makeBonusCourse(bank, mode);
+    questionIndex = 0; history = []; objects = []; $('objects').replaceChildren();
+    model = new DataRun.RunnerModel(9999, 3 + upgrades.heart);
+    Object.assign(player, { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 });
+    elapsed = worldOffset = 0; nextQuizAt = 20; spawnIn = 1.4; stageIndex = -1; invincible = 0; fallReason = '';
+    $('game').className = 'game-screen'; $('runner').style.transform = 'translateY(0)';
+    updateHud(); updateTheme(0); showScreen('game'); state = 'countdown';
+    countdown(['3', '2', '1', 'GO!'], 0);
+  }
+  function countdown(words, index) {
+    if (state !== 'countdown') return;
+    if (index >= words.length) { $('countdown').textContent = ''; state = 'running'; lastTime = performance.now(); cancelAnimationFrame(animationId); animationId = requestAnimationFrame(frame); return; }
+    $('countdown').textContent = words[index]; tone(330 + index * 90, .08, 'sine', .03);
+    setTimeout(() => countdown(words, index + 1), index === words.length - 1 ? 450 : 650);
+  }
+
+  function getSpeed() {
+    const level = Math.min(4, Math.floor(elapsed / 60));
+    const responsiveBase = Math.max(180, Math.min(300, $('scene').clientWidth * .23));
+    return Math.min(440, responsiveBase + level * 35);
+  }
+  function frame(now) {
+    if (state !== 'running') return;
+    const dt = Math.min(.033, Math.max(0, (now - lastTime) / 1000)); lastTime = now;
+    elapsed += dt; invincible = Math.max(0, invincible - dt);
+    const speed = getSpeed(), level = Math.min(4, Math.floor(elapsed / 60));
+    updateTheme(level); updatePhysics(dt); moveWorld(dt, speed); moveObjects(dt, speed); maybeSpawn(dt, level);
+    model.travel(speed * dt / 25); updateHud();
+    if (elapsed >= nextQuizAt && player.grounded && !nearGap()) openBonus();
+    if (state === 'running') animationId = requestAnimationFrame(frame);
+  }
+  function updatePhysics(dt) {
+    const over = overGap();
+    if (player.grounded && !over) player.coyote = .09;
+    else player.coyote = Math.max(0, player.coyote - dt);
+    if (over && player.y <= 1) player.grounded = false;
+    if (!player.grounded) {
+      const gravity = player.vy > 0 ? 1750 : 2550;
+      player.vy -= gravity * dt; player.y += player.vy * dt;
+      if (player.y <= 0 && !over) { player.y = 0; player.vy = 0; player.grounded = true; player.jumps = 0; }
+      if (player.y < -220) { triggerFall('낭떠러지에 빠졌어요. 다음에는 점프 타이밍을 조금 앞당겨 보세요!'); return; }
+    }
+    $('runner').style.transform = `translateY(${-player.y}px)`;
+    $('runner').classList.toggle('airborne', !player.grounded);
+  }
+  function jump() {
+    if (state !== 'running') return;
+    const canFirst = player.grounded || player.coyote > 0;
+    if (canFirst) { player.grounded = false; player.coyote = 0; player.jumps = 1; player.vy = 710 * (1 + upgrades.jump * .04); jumpSound(false); }
+    else if (player.jumps < 2) { player.jumps = 2; player.vy = 655 * (1 + upgrades.jump * .04); jumpSound(true); showFloat('2단 점프!', '#d9c2ff'); }
+  }
+  function moveWorld(dt, speed) {
+    worldOffset += speed * dt;
+    $('world').style.backgroundPositionX = `${-worldOffset}px`;
+  }
+
+  function maybeSpawn(dt, level) {
+    spawnIn -= dt; if (spawnIn > 0) return;
+    const roll = Math.random(), startX = $('scene').clientWidth + 80;
+    if (roll < .43) spawnCoinLine(startX, level);
+    else if (roll < .70) { spawnObject('obstacle', startX, 0, 55, false); spawnObject('coin', startX + 5, level > 1 ? 120 : 92, 48); }
+    else if (roll < .86 && level >= 1) { spawnObject('obstacle high', startX, 0, 62, false); spawnObject('coin', startX + 8, 150, 48); }
+    else { const width = 118 + level * 10; spawnObject('gap', startX, 0, width, false); [0,1,2].forEach(i => spawnObject('coin', startX + 20 + i * (width - 40) / 2, 72 + (i === 1 ? 55 : 10), 45)); }
+    spawnIn = Math.max(.92, 1.65 - level * .11) + Math.random() * .45;
+  }
+  function spawnCoinLine(startX, level) {
+    const pattern = level > 1 && Math.random() > .5 ? [0, 48, 100, 48, 0] : [0, 0, 0, 0];
+    pattern.forEach((height, i) => spawnObject('coin', startX + i * 58, height, 48));
+  }
+  function spawnObject(kind, x, height, width, collectible = true) {
+    const el = document.createElement('div'); el.className = `game-object ${kind}`;
+    el.style.width = width + 'px'; if (height) el.style.bottom = `calc(18% + ${height}px)`;
+    $('objects').append(el); objects.push({ el, type: kind.split(' ')[0], high: kind.includes('high'), x, height, width, collected: false, hit: false, collectible });
+  }
+  function moveObjects(dt, speed) {
+    const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18), sensor = 25 + upgrades.sensor * 12;
+    objects.forEach(obj => {
+      obj.x -= speed * dt; obj.el.style.transform = `translateX(${obj.x}px)`;
+      const overlap = obj.x < runnerX + 100 + sensor && obj.x + obj.width > runnerX + 25 - sensor;
+      if (obj.type === 'coin' && !obj.collected && overlap && Math.abs(player.y - obj.height) < 88 + sensor) collectCoin(obj);
+      if (obj.type === 'obstacle' && !obj.hit && overlap) {
+        const safeHeight = obj.high ? 116 : 58;
+        if (player.y < safeHeight) hitObstacle(obj);
+        else obj.hit = true;
+      }
     });
-    const active = $('route').querySelector('.active'); if (active) $('route').scrollLeft = Math.max(0, active.offsetLeft - $('route').offsetLeft - 35);
+    objects.filter(o => o.x + o.width < -100 || o.collected).forEach(o => o.el.remove());
+    objects = objects.filter(o => o.x + o.width >= -100 && !o.collected);
   }
-  function updateHud() { $('coins').textContent = session.coins; $('combo').textContent = session.combo; const count = session.history.length; $('progress-fill').style.width = (count / session.questions.length * 100) + '%'; $('progress').setAttribute('aria-valuenow', count); $('progress').setAttribute('aria-valuemax', session.questions.length); }
-  function renderQuestion(focus = true) {
-    const q = session.current, key = q.placeKey || 'concept';
-    $('question').textContent = q.question; $('prompt').textContent = q.prompt || '데이터에 대해 배운 내용을 떠올려 보세요.';
-    $('question-kind').textContent = typeNames[q.type]; $('question-number').textContent = `문제 ${session.index + 1} / ${session.questions.length}`;
-    $('place-icon').textContent = places[key][0]; $('place-name').textContent = places[key][1]; $('stage-label').textContent = key === 'concept' ? '마지막 데이터 미션' : '학교 속 데이터 탐험';
-    $('mission-sign').textContent = q.type === 'datatype' ? '수치형일까? 범주형일까?' : q.type === 'concept' ? '배운 내용을 떠올려요!' : '어떤 데이터가 필요할까요?';
-    $('scene-caption').textContent = '로봇은 자동으로 달려요. 아래에서 답을 골라 주세요!';
-    $('choices').replaceChildren(); $('choices').classList.toggle('two', q.choices.length === 2);
-    q.choices.forEach((text, i) => { const b = document.createElement('button'); b.className = 'choice'; b.dataset.index = i; const n = document.createElement('span'); n.className = 'choice-number'; n.textContent = i + 1; const label = document.createElement('span'); label.textContent = text; b.append(n, label); b.addEventListener('click', () => answer(i)); $('choices').append(b); });
-    $('explanation').hidden = true; $('answer-hint').hidden = false; $('answer-hint').innerHTML = q.choices.length === 2 ? '답을 클릭하거나 키보드의 <kbd>1</kbd> <kbd>2</kbd>를 눌러요.' : '답을 클릭하거나 키보드의 <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>을 눌러요.';
-    $('robot-jump').className = 'robot-jump'; $('coin-trail').className = 'coin-trail'; $('reward').className = 'reward';
-    updateHud(); renderRoute(); if (focus) $('question').focus({ preventScroll: true });
+  function collectCoin(obj) { obj.collected = true; model.collectCoin(); coinSound(); showFloat('+10', '#fff19a'); }
+  function hitObstacle(obj) {
+    obj.hit = true; if (invincible > 0) return; invincible = 1.25; model.hitObstacle(); hitSound();
+    $('game').classList.add('shake'); $('runner').classList.add('hit'); setTimeout(() => { $('game').classList.remove('shake'); $('runner').classList.remove('hit'); }, 560);
+    $('scene-message').textContent = model.hearts > 0 ? '괜찮아요! 다음 장애물은 점프로 피해요.' : '체력이 모두 닳아 균형을 잃었어요!';
+    if (model.hearts <= 0) setTimeout(() => triggerFall('장애물에 부딪혀 체력이 모두 닳았어요.'), 260);
   }
-  function start(customQuestions) {
-    if ($('help-dialog').open) $('help-dialog').close(); if ($('pause-dialog').open) $('pause-dialog').close();
-    mode = document.querySelector('input[name="course"]:checked').value;
-    session = new DataRun.Session(customQuestions || DataRun.makeCourse(bank, mode));
-    state = 'question'; elapsed = worldOffset = notesAt = fxAt = 0; lastTime = 0; $('game').classList.remove('paused');
-    showScreen('game'); renderQuestion(false); cancelAnimationFrame(animationId); animationId = requestAnimationFrame(frame); if (sound) initAudio(); $('question').focus({ preventScroll: true });
+  function overGap() {
+    const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18) + 45;
+    return objects.some(o => o.type === 'gap' && o.x < runnerX + 52 && o.x + o.width > runnerX);
   }
-  function frame(time) {
-    if (state !== 'question' && state !== 'feedback') return;
-    const dt = lastTime ? Math.min(50, time - lastTime) : 0; lastTime = time; elapsed += dt;
-    if (!reducedMotion.matches) { worldOffset += dt * (state === 'feedback' && session.history.at(-1)?.correct ? .12 : .028); $('world').style.backgroundPositionX = -worldOffset + 'px'; }
-    if (sound && elapsed > notesAt) { const scale = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 349.23]; tone(scale[Math.floor(elapsed / 420) % scale.length], .12, 'sine', 0, .013); notesAt = elapsed + 420; }
-    if (fxAt && elapsed - fxAt > 1300) { $('robot-jump').className = 'robot-jump'; $('reward').className = 'reward'; fxAt = 0; }
-    animationId = requestAnimationFrame(frame);
+  function nearGap() {
+    const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18);
+    return objects.some(o => o.type === 'gap' && o.x < runnerX + 260 && o.x + o.width > runnerX - 60);
   }
-  function answer(index) {
-    if (state !== 'question') return;
-    const result = session.answer(index); if (!result) return;
-    state = 'feedback'; const q = result.question;
-    [...$('choices').children].forEach((b, i) => { b.disabled = true; if (i === q.answer) { b.classList.add('correct'); b.querySelector('.choice-number').textContent = '✓'; b.setAttribute('aria-label', '정답: ' + q.choices[i]); } else if (i === index) { b.classList.add('wrong'); b.querySelector('.choice-number').textContent = '×'; b.setAttribute('aria-label', '내가 고른 오답: ' + q.choices[i]); } });
-    $('explanation').hidden = false; $('explanation').classList.toggle('try-again', !result.correct); $('answer-hint').hidden = true;
-    $('feedback-title').textContent = result.correct ? `정답이에요! 코인 +${result.earned}${result.earned > 10 ? ' · 3연속 보너스!' : ''}` : '괜찮아요! 함께 알아봐요.';
-    $('feedback-text').textContent = (result.correct ? '' : `정답은 ‘${q.choices[q.answer]}’이에요. `) + q.explanation;
-    $('next').textContent = session.index === session.questions.length - 1 ? '모험 결과 보기 →' : '다음 문제 →';
-    $('scene-caption').textContent = result.correct ? '멋져요! 데이터 코인을 모았어요.' : '틀려도 모험은 계속돼요. 해설을 읽어 보세요.';
-    $('robot-jump').classList.add(result.correct ? 'jumping' : 'stumble');
-    if (result.correct) { $('coin-trail').classList.add('collect'); $('reward').textContent = '+' + result.earned; $('reward').classList.add('show'); }
-    fxAt = elapsed || .001; melody(result.correct); updateHud(); $('next').focus({ preventScroll: true });
+  function showFloat(text, color) { const el = $('floating-score'); el.textContent = text; el.style.color = color; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
+  function updateHud() {
+    if (!model) return;
+    $('score').textContent = model.score.toLocaleString(); $('coins').textContent = model.coins; $('hearts').textContent = '♥'.repeat(model.hearts) + '♡'.repeat(model.maxHearts - model.hearts);
+    const mins = Math.floor(elapsed / 60), secs = Math.floor(elapsed % 60); $('bonus-count').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    $('run-progress-fill').style.width = `${Math.min(100, elapsed % 60 / 60 * 100)}%`;
   }
-  function next() { if (state !== 'feedback') return; session.next(); if (session.done) finish(); else { state = 'question'; renderQuestion(); } }
+  function updateTheme(level) {
+    const current = Math.floor(elapsed / 60) % themes.length;
+    if (current !== stageIndex) {
+      stageIndex = current; const theme = themes[current];
+      $('scene').className = `scene theme-${theme.key} speed-${level + 1}`;
+      $('theme-banner').innerHTML = `<small>${current + 1}번째 장소 · 1분 구간</small><b>${theme.icon} ${theme.name}</b>`;
+      $('scene-message').textContent = `${theme.name}에서 필요한 데이터를 찾아 달려요!`;
+    } else $('scene').className = `scene theme-${themes[current].key} speed-${level + 1}`;
+    $('stage-text').textContent = `${themes[current].name} · 속도 ${level + 1}단계${level === 4 ? ' (최고 속도)' : ''}`;
+  }
+
+  function openBonus() {
+    state = 'quiz'; cancelAnimationFrame(animationId); activeQuestion = questions[questionIndex % questions.length]; questionIndex++;
+    $('bonus-number').textContent = `보너스 문제 ${history.length + 1}`; $('question-kind').textContent = typeNames[activeQuestion.type];
+    $('question').textContent = activeQuestion.question; $('prompt').textContent = activeQuestion.prompt || '생활 속 문제를 해결하려면 어떤 데이터가 필요할까요?';
+    $('choices').replaceChildren(); $('feedback').hidden = true; $('feedback').className = 'feedback';
+    activeQuestion.choices.forEach((choice, i) => { const button = document.createElement('button'); button.className = 'choice'; button.innerHTML = `<span class="choice-number">${i + 1}</span><span>${choice}</span>`; button.addEventListener('click', () => answerBonus(i)); $('choices').append(button); });
+    $('bonus-dialog').showModal(); $('question').focus();
+  }
+  function answerBonus(choice) {
+    if (state !== 'quiz' || $('feedback').hidden === false) return;
+    const correct = choice === activeQuestion.answer, reward = correct ? 20 + Math.floor(Math.random() * 31) : 20;
+    const delta = model.answerBonus(correct, reward); history.push({ question: activeQuestion, choice, correct, delta });
+    [...$('choices').children].forEach((button, i) => { button.disabled = true; if (i === activeQuestion.answer) button.classList.add('correct'); else if (i === choice) button.classList.add('wrong'); });
+    $('feedback').hidden = false; $('feedback').classList.toggle('wrong', !correct);
+    $('feedback-title').textContent = correct ? `정답! 데이터 코인 +${reward}` : '아쉬워요! 데이터 코인 -20';
+    $('feedback-text').textContent = (correct ? '' : `정답은 ‘${activeQuestion.choices[activeQuestion.answer]}’이에요. `) + activeQuestion.explanation;
+    quizSound(correct); updateHud(); $('continue').focus();
+  }
+  function continueRun() {
+    if (state !== 'quiz' || $('feedback').hidden) return;
+    $('bonus-dialog').close(); nextQuizAt = elapsed + 28; state = 'running'; lastTime = performance.now(); animationId = requestAnimationFrame(frame);
+  }
+
+  function triggerFall(reason) {
+    if (!['running','countdown'].includes(state)) return;
+    state = 'falling'; fallReason = reason; cancelAnimationFrame(animationId); $('game').classList.add('falling'); hitSound();
+    setTimeout(finish, 1050);
+  }
   function finish() {
-    state = 'results'; cancelAnimationFrame(animationId); showScreen('results');
-    const allCorrect = session.correctCount === session.questions.length;
-    $('results-title').textContent = allCorrect ? '최고의 데이터 탐험가!' : '데이터 모험 완료!'; $('result-message').textContent = allCorrect ? '모든 문제를 맞혔어요. 우리 학교의 데이터를 완벽하게 탐험했네요!' : '끝까지 달린 여러분이 멋져요! 헷갈린 문제를 다시 살펴볼까요?';
-    $('result-correct').textContent = `${session.correctCount} / ${session.questions.length}`; $('result-coins').textContent = session.coins; $('result-best').textContent = session.bestCombo;
-    $('retry-wrong').hidden = allCorrect; $('review').replaceChildren();
-    if (allCorrect) { const p = document.createElement('p'); p.className = 'review-perfect'; p.textContent = '✦ 모든 미션 성공! 다른 코스로도 모험을 떠나 보세요.'; $('review').append(p); }
-    else { const title = document.createElement('h2'); title.textContent = '다시 보면 더 잘할 수 있어요'; const sub = document.createElement('p'); sub.className = 'review-intro'; sub.textContent = '틀린 문제의 정답과 해설을 모았어요.'; $('review').append(title, sub); session.history.filter(x => !x.correct).forEach(r => { const card = document.createElement('article'); card.className = 'review-card'; const cat = document.createElement('small'); cat.textContent = typeNames[r.question.type] + ' · 원문 ' + r.question.id + '번'; const h = document.createElement('h3'); h.textContent = r.question.question; const chosen = document.createElement('p'); chosen.textContent = '내가 고른 답: ' + r.question.choices[r.choice]; const right = document.createElement('p'); right.className = 'right-answer'; right.textContent = '✓ 정답: ' + r.question.choices[r.question.answer]; const detail = document.createElement('p'); detail.textContent = r.question.explanation; card.append(cat, h, chosen, right, detail); $('review').append(card); }); }
-    $('replay').focus({ preventScroll: true }); [523.25, 659.25, 783.99, 1046.5].forEach((n, i) => tone(n, .3, 'sine', i * .15));
+    state = 'results'; showScreen('results'); const earned = Math.max(1, Math.floor(model.coins / 20) + model.bonusCorrect * 2); upgrades.shards += earned; saveUpgrades();
+    $('results-title').textContent = '이번 달리기 종료!'; $('result-message').textContent = fallReason + ` 데이터 조각 ${earned}개를 보상으로 받았어요.`;
+    $('result-score').textContent = model.score.toLocaleString(); $('result-coins').textContent = model.coins; $('result-correct').textContent = `${model.bonusCorrect} / ${model.bonusAnswered}`; $('result-distance').textContent = `${Math.floor(model.distance)}m`; $('shards').textContent = upgrades.shards;
+    renderUpgrades(); renderReview();
   }
-  function pause() { if (!['question', 'feedback'].includes(state)) return; returnFocus = document.activeElement; $('pause-dialog').dataset.previous = state; state = 'paused'; cancelAnimationFrame(animationId); $('game').classList.add('paused'); if (audio?.state === 'running') audio.suspend().catch(() => {}); $('pause-dialog').showModal(); }
-  function resume() { if (state !== 'paused') return; state = $('pause-dialog').dataset.previous; $('pause-dialog').close(); $('game').classList.remove('paused'); lastTime = 0; animationId = requestAnimationFrame(frame); if (sound) initAudio(); returnFocus?.focus({ preventScroll: true }); }
-  function home() { state = 'home'; cancelAnimationFrame(animationId); if ($('pause-dialog').open) $('pause-dialog').close(); $('game').classList.remove('paused'); showScreen('home'); $('start').focus({ preventScroll: true }); }
-  $('start').addEventListener('click', () => start()); $('help-start').addEventListener('click', () => start()); $('help').addEventListener('click', () => $('help-dialog').showModal()); $('close-help').addEventListener('click', () => $('help-dialog').close());
-  $('next').addEventListener('click', next); $('pause').addEventListener('click', pause); $('resume').addEventListener('click', resume); $('pause-home').addEventListener('click', home); $('home-button').addEventListener('click', pause); $('result-home').addEventListener('click', home); $('replay').addEventListener('click', () => start()); $('retry-wrong').addEventListener('click', () => start(session.wrongQuestions)); soundButtons.forEach(b => b.addEventListener('click', toggleSound));
-  $('pause-dialog').addEventListener('cancel', e => { e.preventDefault(); resume(); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
-  document.addEventListener('keydown', e => {
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || $('help-dialog').open) return;
-    if (e.key === 'Escape' && ['question', 'feedback'].includes(state)) { e.preventDefault(); pause(); return; }
-    if (state === 'question' && /^[123]$/.test(e.key)) { e.preventDefault(); answer(Number(e.key) - 1); }
-    // Enter and Space keep their native button behavior for accessible keyboard play.
+  function renderUpgrades() {
+    $('upgrades').replaceChildren();
+    upgradeDefs.forEach(def => { const level = upgrades[def.key], max = def.key === 'heart' ? 3 : 5, cost = (level + 1) * 4; const button = document.createElement('button'); button.className = 'upgrade'; button.disabled = level >= max || upgrades.shards < cost; button.innerHTML = `<span>${def.icon}</span><b>${def.name} Lv.${level}</b><small>${level >= max ? '최고 단계' : `${def.detail} · 조각 ${cost}개`}</small>`; button.addEventListener('click', () => buyUpgrade(def.key, cost, button)); $('upgrades').append(button); });
+  }
+  function buyUpgrade(key, cost, button) { if (upgrades.shards < cost) return; upgrades.shards -= cost; upgrades[key]++; saveUpgrades(); button.classList.add('selected'); $('shards').textContent = upgrades.shards; setTimeout(renderUpgrades, 350); tone(660,.12,'sine',.04); tone(880,.18,'sine',.04,.09); }
+  function renderReview() {
+    $('review').replaceChildren(); if (!history.length) return;
+    const title = document.createElement('h2'); title.textContent = '보너스 문제 학습 기록'; $('review').append(title);
+    history.forEach(item => { const card = document.createElement('article'); card.className = 'review-card'; const chosen = item.question.choices[item.choice]; card.innerHTML = `<b>${item.correct ? '✓ 정답' : '다시 보기'} · ${item.question.question}</b><p>선택: ${chosen}</p><p class="right">정답: ${item.question.choices[item.question.answer]}</p><p>${item.question.explanation}</p>`; $('review').append(card); });
+  }
+
+  function pause() { if (state !== 'running') return; state = 'paused'; cancelAnimationFrame(animationId); $('game').classList.add('paused'); $('pause-dialog').showModal(); }
+  function resume() { if (state !== 'paused') return; $('pause-dialog').close(); $('game').classList.remove('paused'); state = 'running'; lastTime = performance.now(); animationId = requestAnimationFrame(frame); }
+  function goHome() { state = 'home'; cancelAnimationFrame(animationId); ['help-dialog','bonus-dialog','pause-dialog'].forEach(id => { if ($(id).open) $(id).close(); }); showScreen('home'); }
+
+  $('start').addEventListener('click', start); $('help').addEventListener('click', () => $('help-dialog').showModal()); $('close-help').addEventListener('click', () => $('help-dialog').close()); $('help-start').addEventListener('click', start);
+  $('jump').addEventListener('pointerdown', event => { event.preventDefault(); event.stopPropagation(); jump(); }); $('scene').addEventListener('pointerdown', event => { if (!event.target.closest('button')) jump(); });
+  $('continue').addEventListener('click', continueRun); $('pause').addEventListener('click', pause); $('resume').addEventListener('click', resume); $('home-button').addEventListener('click', goHome); $('pause-home').addEventListener('click', goHome); $('result-home').addEventListener('click', goHome); $('replay').addEventListener('click', start);
+  document.addEventListener('keydown', event => {
+    if ((event.code === 'Space' || event.code === 'ArrowUp') && state === 'running') { event.preventDefault(); jump(); }
+    if (state === 'quiz' && /^[1-3]$/.test(event.key)) answerBonus(Number(event.key) - 1);
+    if (event.key === 'Escape' && state === 'paused') resume();
   });
 })();

@@ -1,61 +1,89 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#82e1ca"><meta name="description" content="로봇 친구와 학교를 달리며 배우는 데이터! 생활 속 데이터, 데이터 개념, 수치형·범주형을 익히는 38문제 학습 게임.">
-  <title>데이터 런 — 학교 속 데이터 모험</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#63d4bd">
+  <meta name="description" content="로봇과 직접 달리고 점프하며 보너스 데이터 문제를 푸는 학교 러닝 게임">
+  <title>데이터 런 — 점프! 달리기! 데이터!</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="runner-extra.css">
   <link rel="preload" href="assets/start-screen.png" as="image">
 </head>
 <body>
 <main id="app">
   <section id="home" class="home" aria-labelledby="home-title">
-    <h1 id="home-title" class="sr-only">데이터 런 — 학교 속 데이터 모험</h1>
+    <h1 id="home-title" class="sr-only">데이터 런</h1>
     <div class="hero">
-      <img class="hero-art" src="assets/start-screen.png" width="1672" height="941" alt="데이터 런. 민트색 로봇 친구와 급식실, 교실, 도서관을 달리는 신나는 학교 모험." fetchpriority="high">
-      <button id="start" class="hotspot start-hotspot" aria-label="게임 시작"><span class="sr-only">게임 시작</span></button>
-      <button id="help" class="hotspot help-hotspot" aria-label="게임 방법"><span class="sr-only">게임 방법</span></button>
-      <span class="hero-badge">배우며 달리는 우리 학교</span>
+      <img class="hero-art" src="assets/start-screen.png" width="1672" height="941" alt="민트색 로봇이 학교를 달리는 데이터 런">
+      <button id="start" class="hotspot start-hotspot" aria-label="게임 시작"></button>
+      <button id="help" class="hotspot help-hotspot" aria-label="게임 방법"></button>
+      <span class="hero-badge">달리고 · 점프하고 · 문제 풀기!</span>
     </div>
-    <div class="home-bottom">
-      <div class="home-copy"><span class="little-label">READY, DATA, GO!</span><h2>로봇 친구와 데이터 탐험을 떠나요!</h2><p>문제를 읽고 답을 선택하면, 로봇이 점프하며 코인을 모아요.</p></div>
-      <fieldset class="course-picker"><legend>어떤 모험을 할까요?</legend><label><input type="radio" name="course" value="all" checked><span>학교 한 바퀴 <b>38문제</b></span></label><label><input type="radio" name="course" value="short"><span>짧게 달리기 <b>10문제</b></span></label><label><input type="radio" name="course" value="datatype"><span>데이터 분류 <b>10문제</b></span></label></fieldset>
-      <div class="home-foot"><span>마우스·터치·숫자 키로 플레이 · 시간제한 없이 천천히</span><button class="text-btn sound-toggle" aria-pressed="false">♫ 소리 켜기</button></div>
-    </div>
-  </section>
-
-  <section id="game" class="game-screen" aria-label="데이터 런 게임" hidden>
-    <header class="game-header"><button class="brand" id="home-button" aria-label="시작 화면으로">데이터<span>런</span><small>DATA RUN</small></button><div class="hud"><div class="hud-item"><span class="coin-icon" aria-hidden="true">★</span><span><small>모은 코인</small><b id="coins">0</b></span></div><div class="hud-item"><span class="hud-star" aria-hidden="true">✦</span><span><small>연속 정답</small><b id="combo">0</b></span></div><button class="icon-btn sound-toggle" aria-pressed="false" aria-label="소리 켜기">♫</button><button class="icon-btn" id="pause" aria-label="일시정지">Ⅱ</button></div></header>
-    <div class="route" id="route" aria-label="모험 경로"></div>
-    <div class="scene" id="scene" aria-label="로봇이 학교를 달리는 애니메이션">
-      <div class="world" id="world"></div><div class="scene-shade"></div>
-      <div class="scene-location"><span id="place-icon">🍽️</span><div><small id="stage-label">첫 번째 장소</small><b id="place-name">급식실</b></div></div>
-      <div class="mission-sign" id="mission-sign">데이터를 찾아 출발!</div>
-      <div class="robot-wrap" id="robot-wrap"><div class="robot-shadow"></div><div class="robot-jump" id="robot-jump"><div class="robot" id="robot" role="img" aria-label="민트색 로봇 친구"></div></div><div class="dust"><i></i><i></i><i></i></div></div>
-      <div class="coin-trail" id="coin-trail" aria-hidden="true"><i>▥</i><i>◕</i><i>▥</i></div>
-      <div class="reward" id="reward" aria-hidden="true"></div>
-      <div class="scene-caption" id="scene-caption">로봇은 자동으로 달려요. 아래에서 답을 골라 주세요!</div>
-    </div>
-    <div class="question-area">
-      <div class="question-top"><span class="question-kind" id="question-kind">생활 속 데이터</span><span class="question-number" id="question-number">문제 1 / 38</span></div>
-      <div class="progress" role="progressbar" aria-label="푼 문제" aria-valuemin="0" aria-valuemax="38" aria-valuenow="0" id="progress"><div id="progress-fill"></div></div>
-      <p class="prompt" id="prompt"></p><h2 id="question" tabindex="-1"></h2>
-      <div id="choices" class="choices" aria-label="답 선택"></div>
-      <div id="explanation" class="explanation" role="status" hidden><div><b id="feedback-title"></b><p id="feedback-text"></p></div><button id="next" class="primary">다음 문제 <span aria-hidden="true">→</span></button></div>
-      <p id="answer-hint" class="answer-hint">답을 클릭하거나 키보드의 <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>을 눌러요.</p>
+    <div class="home-panel">
+      <div><span class="eyebrow">RUN · JUMP · LEARN</span><h2>직접 점프하며 데이터 코인을 모아요!</h2><p>장애물을 뛰어넘고, 보너스 타임 문제를 맞혀 높은 점수를 만들어 보세요.</p></div>
+      <fieldset class="course-picker"><legend>달리기 코스</legend>
+        <label><input type="radio" name="course" value="short" checked><span>연습 달리기 <b>5문제</b></span></label>
+        <label><input type="radio" name="course" value="all"><span>학교 한 바퀴 <b>10문제</b></span></label>
+        <label><input type="radio" name="course" value="datatype"><span>분류 챌린지 <b>10문제</b></span></label>
+      </fieldset>
+      <p class="home-tip"><kbd>SPACE</kbd> 또는 <b>점프 버튼</b> · 소리 없이도 플레이 가능</p>
     </div>
   </section>
 
-  <section id="results" class="results" aria-labelledby="results-title" hidden>
-    <div class="result-top"><span class="little-label">MISSION COMPLETE!</span><div class="result-mascot" aria-hidden="true"></div><h1 id="results-title">데이터 모험 완료!</h1><p id="result-message"></p></div>
-    <div class="result-stats"><div><span>정답</span><b id="result-correct"></b></div><div><span>모은 코인</span><b id="result-coins"></b></div><div><span>최고 연속 정답</span><b id="result-best"></b></div></div>
-    <div class="result-actions"><button id="replay" class="primary">↻ 한 번 더 달리기</button><button id="retry-wrong" class="secondary">틀린 문제 다시 풀기</button><button id="result-home" class="text-btn">시작 화면</button></div>
+  <section id="game" class="game-screen" hidden aria-label="데이터 런 달리기 게임">
+    <header class="game-header">
+      <button id="home-button" class="brand" aria-label="시작 화면으로">데이터<span>런</span><small>DATA RUN</small></button>
+      <div class="hud">
+        <div class="hud-cell"><small>점수</small><b id="score">0</b></div>
+        <div class="hud-cell"><small>코인</small><b><span aria-hidden="true">●</span> <span id="coins">0</span></b></div>
+        <div class="hud-cell hearts" aria-label="남은 체력"><small>체력</small><b id="hearts">♥♥♥</b></div>
+        <button id="pause" class="icon-btn" aria-label="일시정지">Ⅱ</button>
+      </div>
+    </header>
+
+    <div class="run-progress"><span id="stage-text">급식실 · 속도 1단계</span><div><i id="run-progress-fill"></i></div><b id="bonus-count">00:00</b></div>
+
+    <div id="scene" class="scene" aria-label="로봇이 달리는 게임 화면">
+      <div id="world" class="world"></div><div class="far-clouds"></div><div id="wind" class="wind"></div>
+      <div id="theme-banner" class="theme-banner"><small>첫 번째 장소</small><b>🍽️ 급식실</b></div>
+      <div id="objects" class="objects" aria-hidden="true"></div>
+      <div id="runner" class="runner"><div class="runner-shadow"></div><div id="robot" class="robot" role="img" aria-label="달리는 민트색 로봇"></div></div>
+      <div id="floating-score" class="floating-score" aria-live="polite"></div>
+      <div id="countdown" class="countdown" aria-live="assertive"></div>
+      <div class="road-line"></div>
+      <div class="scene-message" id="scene-message">화면이나 점프 버튼을 눌러 장애물을 뛰어넘어요!</div>
+      <button id="jump" class="jump-button" aria-label="점프"><span>↑</span><b>점프!</b><small>SPACE</small></button>
+    </div>
+
+    <div class="runner-guide"><span><i class="mini-coin">●</i> 데이터 코인은 점수</span><span><i class="mini-obstacle">▲</i> 장애물은 점프로 통과</span><span><i class="mini-bonus">?</i> 퀴즈 정답은 코인 +20~50</span></div>
+  </section>
+
+  <section id="results" class="results" hidden aria-labelledby="results-title">
+    <div class="result-mascot" aria-hidden="true"></div><span class="eyebrow">RUN COMPLETE!</span>
+    <h1 id="results-title">달리기 완료!</h1><p id="result-message"></p>
+    <div class="result-score"><small>최종 점수</small><b id="result-score">0</b></div>
+    <div class="result-stats"><div><span>모은 코인</span><b id="result-coins">0</b></div><div><span>보너스 정답</span><b id="result-correct">0 / 0</b></div><div><span>달린 거리</span><b id="result-distance">0m</b></div></div>
+    <section class="upgrade-panel"><span class="eyebrow">RUN REWARD</span><h2>보상으로 하나를 강화해요</h2><p>달리며 모은 데이터 조각: <b id="shards">0</b></p><div id="upgrades" class="upgrades"></div></section>
+    <div class="result-actions"><button id="replay" class="primary">↻ 강화하고 다시 달리기</button><button id="result-home" class="secondary">시작 화면</button></div>
     <div id="review" class="review"></div>
   </section>
 </main>
 
-<dialog id="help-dialog" class="modal"><button class="close" id="close-help" aria-label="게임 방법 닫기">×</button><span class="little-label">HOW TO PLAY</span><h2>세 가지만 기억해요!</h2><ol class="howto"><li><span>1</span><div><b>문제를 읽어요</b><p>로봇 친구가 학교를 자동으로 달려요.<br>학교에서 만나는 데이터 문제를 읽어 봐요.</p></div></li><li><span>2</span><div><b>알맞은 답을 골라요</b><p>답을 클릭·터치하거나 숫자 키를 눌러요.<br>시간제한은 없어요. 천천히 생각해도 좋아요!</p></div></li><li><span>3</span><div><b>코인을 모으며 배워요</b><p>정답이면 코인 10개! 3연속 정답마다 5개 추가!<br>틀려도 괜찮아요. 해설을 읽고 계속 달려요.</p></div></li></ol><div class="learning-tip"><b>수치형</b>은 개수·양·크기, <b>범주형</b>은 종류·항목!</div><button class="primary wide" id="help-start">알겠어요! 게임 시작 ▶</button></dialog>
-<dialog id="pause-dialog" class="modal pause-modal"><div class="pause-symbol">Ⅱ</div><h2>잠깐 쉬어 가요</h2><p>준비가 되면 모험을 이어 가세요.</p><button id="resume" class="primary wide">계속 달리기 ▶</button><button id="pause-home" class="text-btn wide">이번 모험을 끝내고 시작 화면으로</button></dialog>
-<noscript>이 게임을 실행하려면 브라우저의 JavaScript를 켜 주세요.</noscript>
+<dialog id="help-dialog" class="modal">
+  <button class="close" id="close-help" aria-label="게임 방법 닫기">×</button><span class="eyebrow">HOW TO PLAY</span><h2>달리기는 이렇게 해요!</h2>
+  <ol class="howto"><li><span>1</span><div><b>캐릭터는 자동으로 달려요</b><p>길 위의 데이터 코인에 닿으면 점수가 올라가요.</p></div></li><li><span>2</span><div><b>점프해서 장애물을 넘어요</b><p>화면·점프 버튼을 클릭하거나 <kbd>SPACE</kbd>·<kbd>↑</kbd>를 눌러요.</p></div></li><li><span>3</span><div><b>보너스 문제를 맞혀요</b><p>달리다 문제가 나오면 알맞은 답을 골라 100점을 받아요.</p></div></li></ol>
+  <div class="learning-tip"><b>수치형 데이터</b>는 숫자로 나타낼 수 있고, <b>범주형 데이터</b>는 종류로 나뉘어요.</div><button id="help-start" class="primary wide">알겠어요! 달리기 시작 ▶</button>
+</dialog>
+
+<dialog id="bonus-dialog" class="modal bonus-modal">
+  <div class="bonus-badge">★ BONUS TIME ★</div><p class="bonus-number" id="bonus-number"></p><span class="question-kind" id="question-kind"></span><h2 id="question" tabindex="-1"></h2><p class="prompt" id="prompt"></p><p class="quiz-reward">정답: 코인 +20~50 · 오답: 코인 -20</p>
+  <div id="choices" class="choices" aria-label="답 선택"></div>
+  <div id="feedback" class="feedback" hidden><b id="feedback-title"></b><p id="feedback-text"></p><button id="continue" class="primary wide">계속 달리기 ▶</button></div>
+</dialog>
+
+<dialog id="pause-dialog" class="modal pause-modal"><div class="pause-symbol">Ⅱ</div><h2>잠깐 쉬어 가요</h2><p>준비되면 다시 달려요.</p><button id="resume" class="primary wide">계속 달리기 ▶</button><button id="pause-home" class="text-btn wide">시작 화면으로</button></dialog>
+
 <script src="questions.js"></script><script src="game-core.js"></script><script src="app.js"></script>
-</body></html>
+</body>
+</html>

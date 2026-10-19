@@ -28,6 +28,16 @@
     ], random);
     return [...placeKeys.flatMap(key => bank.filter(q => q.placeKey === key)), ...bank.filter(q => !q.placeKey)];
   }
+  function makeBonusCourse(bank, mode, random = Math.random) {
+    validate(bank);
+    if (mode === 'datatype') return shuffle(bank.filter(q => q.type === 'datatype'), random);
+    if (mode === 'short') return shuffle([
+      ...shuffle(bank.filter(q => q.type === 'life'), random).slice(0, 2),
+      ...shuffle(bank.filter(q => q.type === 'concept'), random).slice(0, 1),
+      ...shuffle(bank.filter(q => q.type === 'datatype'), random).slice(0, 2)
+    ], random);
+    return makeCourse(bank, 'short', random);
+  }
   class Session {
     constructor(questions) { validate(questions); this.questions = questions.slice(); this.index = 0; this.coins = 0; this.combo = 0; this.bestCombo = 0; this.history = []; this.answered = false; }
     get current() { return this.questions[this.index] || null; }
@@ -46,5 +56,18 @@
     }
     next() { if (!this.answered || this.done) return false; this.index++; this.answered = false; return true; }
   }
-  return { validate, makeCourse, Session, placeKeys };
+  class RunnerModel {
+    constructor(totalBonuses, maxHearts = 3) {
+      if (!Number.isInteger(totalBonuses) || totalBonuses < 1) throw new Error('보너스 문제 수가 올바르지 않습니다.');
+      this.totalBonuses = totalBonuses; this.maxHearts = maxHearts; this.hearts = maxHearts;
+      this.coins = 0; this.distance = 0; this.bonusAnswered = 0; this.bonusCorrect = 0;
+    }
+    get score() { return Math.max(0, this.coins) * 10 + Math.floor(this.distance); }
+    travel(meters) { if (Number.isFinite(meters) && meters > 0) this.distance += meters; return this.score; }
+    collectCoin(amount = 1) { if (Number.isInteger(amount) && amount > 0) this.coins += amount; return this.score; }
+    hitObstacle() { if (this.hearts <= 0) return false; this.hearts--; return true; }
+    answerBonus(correct, reward = 20) { if (this.done) return 0; this.bonusAnswered++; if (correct) { this.bonusCorrect++; this.coins += reward; return reward; } this.coins = Math.max(0, this.coins - 20); return -20; }
+    get done() { return this.bonusAnswered >= this.totalBonuses || this.hearts <= 0; }
+  }
+  return { validate, makeCourse, makeBonusCourse, Session, RunnerModel, placeKeys };
 });
