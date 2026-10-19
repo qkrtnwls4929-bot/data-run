@@ -73,7 +73,8 @@
   function getSpeed() {
     const level = Math.min(4, Math.floor(elapsed / 60));
     const responsiveBase = Math.max(200, Math.min(320, $('scene').clientWidth * .25));
-    return Math.min(440, responsiveBase + level * 35);
+    // Stage 1 now starts at the previous Stage 4 pace (+105px/s).
+    return Math.min(440, responsiveBase + 105 + level * 20);
   }
   function frame(now) {
     if (state !== 'running') return;
@@ -117,7 +118,7 @@
     else if (roll < .74) { spawnObject('obstacle', startX, 0, 55, false); spawnObject('coin', startX + 5, level > 1 ? 120 : 92, 48); }
     else if (roll < .91 || elapsed < 32) { spawnObject(level >= 1 ? 'obstacle high' : 'obstacle', startX, 0, level >= 1 ? 62 : 55, false); spawnObject('coin', startX + 8, level >= 1 ? 150 : 92, 48); }
     else { const width = 112 + level * 9; spawnObject('gap', startX, 0, width, false); [0,1,2].forEach(i => spawnObject('coin', startX + 20 + i * (width - 40) / 2, 72 + (i === 1 ? 55 : 10), 45)); }
-    spawnIn = Math.max(.88, 1.48 - level * .10) + Math.random() * .36;
+    spawnIn = Math.max(.74, 1.22 - level * .08) + Math.random() * .28;
   }
   function spawnCoinLine(startX, level) {
     const pattern = level > 1 && Math.random() > .5 ? [0, 48, 100, 48, 0] : [0, 0, 0, 0];
