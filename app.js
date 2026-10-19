@@ -41,7 +41,7 @@
     mode = document.querySelector('input[name="course"]:checked')?.value || mode;
     questions = DataRun.makeBonusCourse(bank, mode);
     questionIndex = 0; history = []; objects = []; $('objects').replaceChildren();
-    model = new DataRun.RunnerModel(9999, 3);
+    model = new DataRun.RunnerModel(9999, 1);
     Object.assign(player, { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 });
     elapsed = worldOffset = 0; nextQuizAt = 15; spawnIn = 1.05; stageIndex = -1; stageQuizCount = 0; invincible = 0; fallReason = '';
     $('game').className = 'game-screen'; $('runner').style.transform = 'translateY(0)';
@@ -116,16 +116,20 @@
   }
   function moveObjects(dt, speed) {
     const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18), sensor = 25;
-    objects.forEach(obj => {
+    for (const obj of objects) {
       obj.x -= speed * dt; obj.el.style.transform = `translateX(${obj.x}px)`;
       const overlap = obj.x < runnerX + 100 + sensor && obj.x + obj.width > runnerX + 25 - sensor;
       if (obj.type === 'coin' && !obj.collected && overlap && Math.abs(player.y - obj.height) < 88 + sensor) collectCoin(obj);
+      if (obj.type === 'gap' && overlap && player.y < 82) {
+        triggerFall('검은 낭떠러지에 떨어졌어요.');
+        return;
+      }
       if (obj.type === 'obstacle' && !obj.hit && overlap) {
         const safeHeight = obj.high ? 116 : 58;
         if (player.y < safeHeight) hitObstacle(obj);
         else obj.hit = true;
       }
-    });
+    }
     objects.filter(o => o.x + o.width < -100 || o.collected).forEach(o => o.el.remove());
     objects = objects.filter(o => o.x + o.width >= -100 && !o.collected);
   }
@@ -134,7 +138,7 @@
     obj.hit = true; if (invincible > 0) return; invincible = 1.25; model.hitObstacle(); hitSound();
     $('game').classList.add('shake'); $('runner').classList.add('hit'); setTimeout(() => { $('game').classList.remove('shake'); $('runner').classList.remove('hit'); }, 560);
     $('scene-message').textContent = model.hearts > 0 ? '괜찮아요! 다음 장애물은 점프로 피해요.' : '체력이 모두 닳아 균형을 잃었어요!';
-    if (model.hearts <= 0) setTimeout(() => triggerFall('장애물에 부딪혀 체력이 모두 닳았어요.'), 260);
+    if (model.hearts <= 0) triggerFall('장애물에 한 번 부딪혀 달리기가 끝났어요.');
   }
   function overGap() {
     const runnerX = $('scene').clientWidth * (innerWidth <= 760 ? .08 : .18) + 45;
