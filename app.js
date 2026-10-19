@@ -120,10 +120,6 @@
       obj.x -= speed * dt; obj.el.style.transform = `translateX(${obj.x}px)`;
       const overlap = obj.x < runnerX + 100 + sensor && obj.x + obj.width > runnerX + 25 - sensor;
       if (obj.type === 'coin' && !obj.collected && overlap && Math.abs(player.y - obj.height) < 88 + sensor) collectCoin(obj);
-      if (obj.type === 'gap' && overlap && player.y < 82) {
-        triggerFall('검은 낭떠러지에 떨어졌어요.');
-        return;
-      }
       if (obj.type === 'obstacle' && !obj.hit && overlap) {
         const safeHeight = obj.high ? 116 : 58;
         if (player.y < safeHeight) hitObstacle(obj);
