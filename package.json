@@ -1,0 +1,7 @@
+{
+  "name": "data-run",
+  "version": "1.0.0",
+  "private": true,
+  "description": "학교 속 데이터를 배우는 38문제 러닝 퀴즈 게임",
+  "scripts": { "test": "node --test tests/core.test.cjs" }
+}
