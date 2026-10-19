@@ -13,7 +13,7 @@
   let state = 'home', mode = 'short', model, questions = [], questionIndex = 0, activeQuestion = null;
   let history = [], objects = [], animationId = 0, lastTime = 0, elapsed = 0, nextQuizAt = 20;
   let spawnIn = 1.2, worldOffset = 0, stageIndex = -1, stageQuizCount = 0, audio = null, invincible = 0, fallReason = '';
-  const player = { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 };
+  const player = { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09, falling: false };
 
   try { DataRun.validate(bank); } catch (error) {
     $('home').innerHTML = '<div class="error-screen"><h1>문제를 불러오지 못했어요</h1><p>게임 파일을 모두 함께 열어 주세요.</p></div>';
@@ -42,7 +42,7 @@
     questions = DataRun.makeBonusCourse(bank, mode);
     questionIndex = 0; history = []; objects = []; $('objects').replaceChildren();
     model = new DataRun.RunnerModel(9999, 1);
-    Object.assign(player, { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09 });
+    Object.assign(player, { y: 0, vy: 0, grounded: true, jumps: 0, coyote: .09, falling: false });
     elapsed = worldOffset = 0; nextQuizAt = 15; spawnIn = 1.05; stageIndex = -1; stageQuizCount = 0; invincible = 0; fallReason = '';
     $('game').className = 'game-screen'; $('runner').style.transform = 'translateY(0)';
     updateHud(); updateTheme(0); showScreen('game'); state = 'countdown';
@@ -75,18 +75,20 @@
     const over = overGap();
     if (player.grounded && !over) player.coyote = .09;
     else player.coyote = Math.max(0, player.coyote - dt);
-    if (over && player.y <= 1) player.grounded = false;
+    if (over && player.y <= 1 && !player.falling) {
+      player.grounded = false; player.falling = true; player.vy = Math.min(player.vy, 0);
+    }
     if (!player.grounded) {
       const gravity = player.vy > 0 ? 1750 : 2550;
       player.vy -= gravity * dt; player.y += player.vy * dt;
-      if (player.y <= 0 && !over) { player.y = 0; player.vy = 0; player.grounded = true; player.jumps = 0; }
+      if (player.y <= 0 && !over && !player.falling) { player.y = 0; player.vy = 0; player.grounded = true; player.jumps = 0; }
       if (player.y < -220) { triggerFall('낭떠러지에 빠졌어요. 다음에는 점프 타이밍을 조금 앞당겨 보세요!'); return; }
     }
     $('runner').style.transform = `translateY(${-player.y}px)`;
     $('runner').classList.toggle('airborne', !player.grounded);
   }
   function jump() {
-    if (state !== 'running') return;
+    if (state !== 'running' || player.falling) return;
     const canFirst = player.grounded || player.coyote > 0;
     if (canFirst) { player.grounded = false; player.coyote = 0; player.jumps = 1; player.vy = 710; jumpSound(false); }
     else if (player.jumps < 2) { player.jumps = 2; player.vy = 655; jumpSound(true); showFloat('2단 점프!', '#d9c2ff'); }
