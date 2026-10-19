@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { makeCourse, Session, validate } = require('../game-core.js');
+const { makeCourse, makeBonusCourse, Session, RunnerModel, validate } = require('../game-core.js');
 const bank = require('../questions.json').questions;
 
 test('all 38 supplied questions appear once in the complete school course', () => {
@@ -41,4 +41,15 @@ test('embedded question script and JSON are identical, and app uses only relativ
   assert.equal(JSON.stringify(sandbox.window.DATA_RUN_QUESTIONS.questions), JSON.stringify(bank));
   const html = fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
   for (const match of html.matchAll(/(?:src|href)="([^"#]+)"/g)) { assert.ok(!match[1].startsWith('/')); assert.ok(fs.existsSync(path.join(__dirname,'..',match[1]))); }
+});
+test('runner score is coin score plus distance score without combo bonus', () => {
+  const runner = new RunnerModel(10); runner.travel(42.9); runner.collectCoin(); runner.collectCoin();
+  assert.equal(runner.coins, 2); assert.equal(runner.score, 62);
+  assert.equal(runner.answerBonus(true, 37), 37); assert.equal(runner.coins, 39); assert.equal(runner.score, 432);
+  assert.equal(runner.answerBonus(false), -20); assert.equal(runner.coins, 19); assert.equal(runner.score, 232);
+});
+test('runner health reaches zero while bonus courses match the selected length', () => {
+  const runner = new RunnerModel(10, 3); assert.equal(runner.hitObstacle(), true); runner.hitObstacle(); runner.hitObstacle();
+  assert.equal(runner.hearts, 0); assert.equal(runner.done, true); assert.equal(runner.hitObstacle(), false);
+  assert.equal(makeBonusCourse(bank, 'short').length, 5); assert.equal(makeBonusCourse(bank, 'all').length, 10); assert.equal(makeBonusCourse(bank, 'datatype').length, 10);
 });
